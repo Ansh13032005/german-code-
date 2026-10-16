@@ -1300,6 +1300,10 @@ function QuestionBlock({ block, answers, setAnswer, currentAudioSrc = null, play
   if (block.type === 'wordSearch') return <WordSearchQuestion block={block} answers={answers} setAnswer={setAnswer} />;
   if (block.type === 'matching') return <MatchingQuestion block={block} answers={answers} setAnswer={setAnswer} />;
   if (block.type === 'dialogueWordBank') return <DialogueWordBankQuestion block={block} answers={answers} setAnswer={setAnswer} />;
+  if (block.type === 'imageDialogueRow') return <ImageDialogueRowQuestion block={block} answers={answers} setAnswer={setAnswer} />;
+  if (block.type === 'imageGridInputs') return <ImageGridInputsQuestion block={block} answers={answers} setAnswer={setAnswer} />;
+  if (block.type === 'sentenceGaps') return <SentenceGapsQuestion block={block} answers={answers} setAnswer={setAnswer} />;
+  if (block.type === 'imageOrderingDrop') return <ImageOrderingDropQuestion block={block} answers={answers} setAnswer={setAnswer} />;
   return null;
 }
 
@@ -1440,6 +1444,363 @@ function TextInputQuestion({ block, answers = {}, setAnswer = () => { }, example
         disabled={example}
       />
       {example && <span className="example-label">Beispiel</span>}
+    </div>
+  );
+}
+
+function ImageDialogueRowQuestion({ block, answers = {}, setAnswer = () => { } }) {
+  const rows = block.rows || [];
+  return (
+    <div className="image-dialogue-rows-container">
+      {rows.map((row) => (
+        <div className="image-dialogue-row-card" key={row.id || row.label}>
+          <div className="image-dialogue-badge-col">
+            {row.image && (
+              <img
+                src={row.image}
+                alt={row.label ? `Bild ${row.label}` : 'Illustration'}
+                className="image-dialogue-thumb"
+                draggable="false"
+              />
+            )}
+            {row.label && <span className="image-dialogue-badge-num">{row.label}</span>}
+          </div>
+          <div className="image-dialogue-content-col">
+            {(row.lines || []).map((line, lIdx) => {
+              if (line.q == null) {
+                return (
+                  <div className="image-dialogue-plain-line" key={lIdx}>
+                    {line.text}
+                  </div>
+                );
+              }
+              const parts = (line.text || '').split('______');
+              const before = parts[0] || '';
+              const after = parts[1] || '';
+              return (
+                <div className="image-dialogue-input-line" key={line.q} id={`q-${line.q}`}>
+                  <span className="image-dialogue-qnum">{line.q}.</span>
+                  {before && <span className="image-dialogue-text-before">{before}</span>}
+                  <input
+                    type="text"
+                    className="text-input-answer inline-gap-input"
+                    value={answers[line.q] || ''}
+                    onChange={(e) => setAnswer(line.q, e.target.value)}
+                    placeholder="..."
+                    autoComplete="off"
+                  />
+                  {after && <span className="image-dialogue-text-after">{after}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ImageGridInputsQuestion({ block, answers = {}, setAnswer = () => { } }) {
+  const items = block.items || [];
+  return (
+    <div className="image-grid-inputs-container">
+      <div className="image-grid-inputs-row">
+        {items.map((item) => {
+          const promptParts = (item.prompt || '').split('______');
+          const prefix = promptParts[0] || '';
+          const suffix = promptParts[1] || '';
+          return (
+            <div className="image-grid-input-card" key={item.q} id={`q-${item.q}`}>
+              {item.badge && <span className="image-grid-badge-top">{item.badge}</span>}
+              {item.image && (
+                <div className="image-grid-thumb-box">
+                  <img src={item.image} alt={item.prompt || `Bild ${item.badge || item.q}`} draggable="false" />
+                </div>
+              )}
+              <div className="image-grid-input-control">
+                {prefix && <span className="image-grid-prefix">{prefix}</span>}
+                <input
+                  type="text"
+                  className="text-input-answer image-grid-input"
+                  value={answers[item.q] || ''}
+                  onChange={(e) => setAnswer(item.q, e.target.value)}
+                  placeholder="..."
+                  autoComplete="off"
+                />
+                {suffix && <span className="image-grid-suffix">{suffix}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SentenceGapsQuestion({ block, answers = {}, setAnswer = () => { } }) {
+  const sentences = block.sentences || [];
+  return (
+    <div className="sentence-gaps-container">
+      {block.instructionBanner && (
+        <div className="sentence-gaps-banner">
+          {block.instructionBanner}
+        </div>
+      )}
+      <div className="sentence-gaps-card">
+        {block.cardTitle && (
+          <h3 className="sentence-gaps-card-title">{block.cardTitle}</h3>
+        )}
+        <div className="sentence-gaps-body">
+          {sentences.map((sent, sIdx) => {
+            if (sent.isSpacer) {
+              return <div className="sentence-gap-spacer" key={sIdx} />;
+            }
+            return (
+              <div className="sentence-gap-line" key={sIdx}>
+                {(sent.segments || []).map((seg, segIdx) => {
+                  if (seg.text !== undefined && seg.q === undefined) {
+                    return <span key={segIdx} className="sentence-gap-plain-text">{seg.text}</span>;
+                  }
+                  return (
+                    <span key={segIdx} className="sentence-gap-inline-wrapper" id={`q-${seg.q}`}>
+                      {seg.q !== undefined && <span className="sentence-gap-badge">{seg.q}</span>}
+                      {seg.prefix && <span className="sentence-gap-prefix">{seg.prefix}</span>}
+                      <input
+                        type="text"
+                        className="text-input-answer sentence-gap-underline-input"
+                        value={answers[seg.q] || ''}
+                        onChange={(e) => setAnswer(seg.q, e.target.value)}
+                        placeholder={seg.placeholder || 'answer'}
+                        autoComplete="off"
+                      />
+                      {seg.suffix && <span className="sentence-gap-suffix">{seg.suffix}</span>}
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageOrderingDropQuestion({ block, answers = {}, setAnswer = () => { } }) {
+  const images = block.images || [];
+  const slots = block.slots || [];
+  const [selectedImgId, setSelectedImgId] = useState(null);
+  const [dragOverSlot, setDragOverSlot] = useState(null);
+
+  // Mode check:
+  // Mode A (Unit 9): each image has img.q, slots have slot.value ("1"-"6"). answers[img.q] = slot.value
+  // Mode B (Unit 11): each slot has slot.q (1-7), images have img.value ("2"-"8"). answers[slot.q] = img.value
+  const isSlotQuestionMode = slots.some((s) => s.q != null);
+
+  const slotAssignments = {}; // { slotKey: imageObj }
+  const assignedImageIds = new Set();
+
+  if (isSlotQuestionMode) {
+    slots.forEach((slot) => {
+      const val = answers[slot.q];
+      if (val) {
+        const foundImg = images.find((im) => String(im.value || im.id) === String(val));
+        if (foundImg) {
+          slotAssignments[String(slot.value)] = foundImg;
+          assignedImageIds.add(foundImg.id);
+        }
+      }
+    });
+  } else {
+    images.forEach((img) => {
+      const val = answers[img.q];
+      if (val) {
+        slotAssignments[String(val)] = img;
+        assignedImageIds.add(img.id);
+      }
+    });
+  }
+
+  const handleDragStart = (e, imgId) => {
+    e.dataTransfer.setData('text/plain', imgId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const assignImageToSlot = (imgId, slotValue) => {
+    const targetImg = images.find((im) => im.id === imgId);
+    if (!targetImg) return;
+
+    if (isSlotQuestionMode) {
+      const targetSlot = slots.find((s) => String(s.value) === String(slotValue));
+      if (!targetSlot) return;
+
+      // If this image was already assigned to another slot, clear that slot
+      slots.forEach((s) => {
+        if (String(answers[s.q]) === String(targetImg.value || targetImg.id)) {
+          setAnswer(s.q, '');
+        }
+      });
+
+      // Assign image value to this slot's question
+      setAnswer(targetSlot.q, String(targetImg.value || targetImg.id));
+    } else {
+      // If another image was in this slot, clear that image's answer
+      const currentOccupant = slotAssignments[slotValue];
+      if (currentOccupant && currentOccupant.id !== imgId) {
+        setAnswer(currentOccupant.q, '');
+      }
+
+      // Set target image's answer to this slot
+      setAnswer(targetImg.q, String(slotValue));
+    }
+
+    setSelectedImgId(null);
+    setDragOverSlot(null);
+  };
+
+  const removeImageFromSlot = (slotValue, occupantImg) => {
+    if (isSlotQuestionMode) {
+      const targetSlot = slots.find((s) => String(s.value) === String(slotValue));
+      if (targetSlot) {
+        setAnswer(targetSlot.q, '');
+      }
+    } else if (occupantImg) {
+      setAnswer(occupantImg.q, '');
+    }
+    if (occupantImg && selectedImgId === occupantImg.id) setSelectedImgId(null);
+  };
+
+  const handleDrop = (e, slotValue) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const imgId = e.dataTransfer.getData('text/plain');
+    if (imgId) {
+      assignImageToSlot(imgId, slotValue);
+    }
+  };
+
+  const handleSlotClick = (slotValue) => {
+    if (selectedImgId) {
+      assignImageToSlot(selectedImgId, slotValue);
+    }
+  };
+
+  const handleImageClick = (img) => {
+    if (assignedImageIds.has(img.id)) return;
+    setSelectedImgId((prev) => (prev === img.id ? null : img.id));
+  };
+
+  return (
+    <div className="image-ordering-drop-container">
+      {block.instruction && (
+        <div className="instruction-box german-instruction" style={{ marginBottom: '16px' }}>
+          {block.instruction}
+        </div>
+      )}
+
+      {/* Pool of draggable images */}
+      <div className="image-pool-section">
+        <div className="image-pool-header">
+          <span className="image-pool-title">{block.poolTitle || 'Bilder (Klicken oder Ziehen):'}</span>
+          {selectedImgId && (
+            <span className="image-pool-selected-hint">
+              Ausgewählt: <strong>{images.find((im) => im.id === selectedImgId)?.label || `Bild ${selectedImgId.toUpperCase()}`}</strong> – Klicke auf ein Zielfeld unten
+            </span>
+          )}
+        </div>
+        <div
+          className="image-pool-grid"
+          style={block.columns ? { gridTemplateColumns: `repeat(${block.columns}, 1fr)` } : undefined}
+        >
+          {images.map((img) => {
+            const isAssigned = assignedImageIds.has(img.id);
+            const isSelected = selectedImgId === img.id;
+            return (
+              <div
+                key={img.id}
+                className={`image-pool-card ${isAssigned ? 'assigned' : ''} ${isSelected ? 'selected' : ''}`}
+                draggable={!isAssigned}
+                onDragStart={(e) => !isAssigned && handleDragStart(e, img.id)}
+                onClick={() => handleImageClick(img)}
+              >
+                <div className="image-card-badge">{img.label || `Bild ${img.id.toUpperCase()}`}</div>
+                <div className="image-card-thumb-wrap">
+                  <img src={img.src} alt={img.label || `Bild ${img.id}`} draggable="false" />
+                </div>
+                {isAssigned && <div className="image-assigned-overlay">✓ Platziert</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Target exercise slots */}
+      <div className="image-slots-section">
+        <div className="image-slots-header">
+          <span className="image-slots-title">{block.slotsTitle || 'Übungen (Reihenfolge):'}</span>
+        </div>
+        <div
+          className="image-slots-grid"
+          style={block.columns ? { gridTemplateColumns: `repeat(${block.columns}, 1fr)` } : undefined}
+        >
+          {block.example && (
+            <div className="image-slot-card has-image example-slot">
+              <div className="slot-badge example-badge">{block.example.label || 'Beispiel: 1. der Koffer'}</div>
+              <div className="slot-dropzone">
+                <div className="slot-placed-image-wrap">
+                  <img src={block.example.src} alt={block.example.label || 'Beispiel'} draggable="false" />
+                  <div className="slot-placed-label">{block.example.imageLabel || 'Gegenstand 1'}</div>
+                  <span className="example-lock-tag">Beispiel</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {slots.map((slot) => {
+            const occupant = slotAssignments[slot.value];
+            const isDragOver = dragOverSlot === slot.value;
+            return (
+              <div
+                key={slot.value}
+                className={`image-slot-card ${occupant ? 'has-image' : 'empty'} ${isDragOver ? 'drag-over' : ''} ${selectedImgId && !occupant ? 'ready-to-place' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverSlot(slot.value);
+                }}
+                onDragLeave={() => setDragOverSlot((curr) => (curr === slot.value ? null : curr))}
+                onDrop={(e) => handleDrop(e, slot.value)}
+                onClick={() => handleSlotClick(slot.value)}
+                id={occupant ? `q-${occupant.q}` : undefined}
+              >
+                <div className="slot-badge">{slot.label}</div>
+                <div className="slot-dropzone">
+                  {occupant ? (
+                    <div className="slot-placed-image-wrap">
+                      <img src={occupant.src} alt={occupant.label} draggable="false" />
+                      <div className="slot-placed-label">{occupant.label}</div>
+                      <button
+                        type="button"
+                        className="slot-remove-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImageFromSlot(slot.value, occupant);
+                        }}
+                        title="Bild entfernen"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="slot-empty-placeholder">
+                      <span className="slot-empty-plus">+</span>
+                      <span className="slot-empty-text">Hier ablegen</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2034,11 +2395,23 @@ function WritingExam({ test, testBundle, profile, onBack, onComplete }) {
   const fullscreenExited = useFullscreenWarning();
 
   const updatePart1 = (q, value) => setResponses((previous) => ({ ...previous, part1: { ...(previous.part1 || {}), [q]: value } }));
-  const updatePart2 = (value) => setResponses((previous) => ({ ...previous, part2: value }));
+  const updateLetter = (taskId, text) => {
+    setResponses((previous) => {
+      const letters = typeof previous.letters === 'object' && previous.letters ? { ...previous.letters } : {};
+      letters[taskId] = text;
+      // Retain part2 as first letter for backwards compatibility with single-letter consumers
+      const firstKey = Object.keys(letters)[0];
+      return {
+        ...previous,
+        letters,
+        part2: letters[firstKey] || text
+      };
+    });
+  };
   const reset = () => {
     if (!window.confirm('Clear all writing answers and restart this module?')) return;
     removeSavedJson(storageKey);
-    setResponses({ part1: {}, part2: '' });
+    setResponses({ part1: {}, part2: '', letters: {} });
     setTimeLeft(test.durationMinutes * 60);
   };
 
@@ -2079,12 +2452,17 @@ function WritingExam({ test, testBundle, profile, onBack, onComplete }) {
             );
           }
           if (task.type === 'letter' || task.type === 'email' || task.points || task.sourceEmail) {
+            const taskId = task.id || `task_${index}`;
+            const taskValue =
+              (responses.letters && typeof responses.letters[taskId] === 'string')
+                ? responses.letters[taskId]
+                : (index === 0 ? (typeof responses.part2 === 'string' ? responses.part2 : (typeof responses.part1 === 'string' ? responses.part1 : '')) : '');
             return (
               <WritingPart2
-                key={task.id || index}
+                key={taskId}
                 task={task}
-                value={responses.part2 || (typeof responses.part1 === 'string' ? responses.part1 : '')}
-                setValue={updatePart2}
+                value={taskValue}
+                setValue={(val) => updateLetter(taskId, val)}
               />
             );
           }

@@ -247,13 +247,29 @@ export function generateEvaluationData(profile, testBundle) {
 
   const moduleResults = activeModules.map((moduleId) => {
     if (moduleId === 'writing') {
-      const responses = getSavedJson(writingStorageKey(testBundle.writing), { part1: {}, part2: '' });
+      const responses = getSavedJson(writingStorageKey(testBundle.writing), { part1: {}, part2: '', letters: {} });
       const part1 = typeof responses?.part1 === 'object' ? responses.part1 : {};
-      const part2 = typeof responses?.part2 === 'string' && responses.part2 ? responses.part2 : (typeof responses?.part1 === 'string' ? responses.part1 : '');
       const rows = objectiveRows({ answerKey: testBundle.writing.answerKey, sections: testBundle.writing.sections }, part1);
       const correct = rows.filter((r) => r.ok).reduce((sum, r) => sum + r.marksObtained, 0);
       const manualMax = testBundle.writing.manualReview?.maxMarks || (testBundle.writing.tasks || []).reduce((sum, t) => sum + (t.maxMarks || (t.id === 'teil1' ? 10 : 5)), 0) || 10;
       const isManualReview = rows.length === 0;
+
+      // Extract all letter/essay task responses
+      const letterTasks = (testBundle.writing.tasks || []).filter((t) => t.type === 'letter' || t.type === 'email' || t.points || t.sourceEmail);
+      const writtenTasks = letterTasks.map((t, idx) => {
+        const taskId = t.id || `task_${idx}`;
+        const answer =
+          (responses?.letters && typeof responses.letters[taskId] === 'string')
+            ? responses.letters[taskId]
+            : (idx === 0 ? (typeof responses?.part2 === 'string' ? responses.part2 : (typeof responses?.part1 === 'string' ? responses.part1 : '')) : '');
+        return {
+          title: t.title || `Schreiben Aufgabe ${idx + 1}`,
+          response: String(answer || '').trim()
+        };
+      }).filter((wt) => wt.response);
+
+      const legacyPart2 = typeof responses?.part2 === 'string' && responses.part2 ? responses.part2 : (typeof responses?.part1 === 'string' ? responses.part1 : '');
+
       return {
         id: 'writing',
         title: testBundle.writing.title || 'Schreiben (Writing)',
@@ -263,7 +279,8 @@ export function generateEvaluationData(profile, testBundle) {
         manualMax,
         isManualReview,
         rows,
-        textResponse: part2.trim()
+        writtenTasks,
+        textResponse: writtenTasks.length > 0 ? writtenTasks.map((wt) => `【${wt.title}】\n${wt.response}`).join('\n\n') : legacyPart2.trim()
       };
     }
 
