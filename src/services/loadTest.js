@@ -41,7 +41,7 @@ async function resolveAssets(testId, value) {
   if (!value || typeof value !== 'object') return value;
   const output = {};
   for (const [key, nested] of Object.entries(value)) {
-    if ((key === 'image' || key === 'audio') && typeof nested === 'string') output[key] = await assetFor(testId, nested);
+    if ((key === 'image' || key === 'audio' || key === 'src') && typeof nested === 'string') output[key] = await assetFor(testId, nested);
     else output[key] = await resolveAssets(testId, nested);
   }
   return output;
