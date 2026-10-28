@@ -251,7 +251,14 @@ export function generateEvaluationData(profile, testBundle) {
       const part1 = typeof responses?.part1 === 'object' ? responses.part1 : {};
       const rows = objectiveRows({ answerKey: testBundle.writing.answerKey, sections: testBundle.writing.sections }, part1);
       const correct = rows.filter((r) => r.ok).reduce((sum, r) => sum + r.marksObtained, 0);
-      const manualMax = testBundle.writing.manualReview?.maxMarks || (testBundle.writing.tasks || []).reduce((sum, t) => sum + (t.maxMarks || (t.id === 'teil1' ? 10 : 5)), 0) || 10;
+      const autoMax = rows.reduce((sum, r) => sum + r.maxMarks, 0);
+      // Free-text tasks are graded by faculty, but their marks still count toward the writing total
+      // (e.g. Unit 3: Aufgabe 1 manual 5 + Aufgabe 2 auto 5 = 10).
+      const configuredManual = Math.max(0, (testBundle.marks?.writing ?? 0) - autoMax);
+      const legacyManual = rows.length === 0
+        ? (testBundle.writing.tasks || []).reduce((sum, t) => sum + (t.maxMarks || (t.id === 'teil1' ? 10 : 5)), 0) || 10
+        : 0;
+      const manualMax = manualReviewMarks(testBundle.writing, autoMax) || configuredManual || legacyManual;
       const isManualReview = rows.length === 0;
 
       // Extract all letter/essay task responses
@@ -274,7 +281,8 @@ export function generateEvaluationData(profile, testBundle) {
         id: 'writing',
         title: testBundle.writing.title || 'Schreiben (Writing)',
         correct,
-        total: rows.length > 0 ? rows.reduce((sum, r) => sum + r.maxMarks, 0) : manualMax,
+        total: autoMax + manualMax,
+        autoMax,
         hasPart1: rows.length > 0,
         manualMax,
         isManualReview,
@@ -299,10 +307,13 @@ export function generateEvaluationData(profile, testBundle) {
     };
   });
 
-  const objectiveModules = moduleResults.filter((m) => !m.isManualReview);
-  const totalObtained = objectiveModules.reduce((sum, m) => sum + m.correct, 0);
-  const totalMax = objectiveModules.reduce((sum, m) => sum + m.total, 0);
-  const percentage = totalMax > 0 ? Math.round((totalObtained / totalMax) * 100) : 0;
+  const totalObtained = moduleResults.reduce((sum, m) => sum + m.correct, 0);
+  // Paper total includes faculty-graded marks; the percentage only covers auto-graded marks so
+  // pending writing does not count against the candidate.
+  const totalMax = moduleResults.reduce((sum, m) => sum + m.total, 0);
+  const pendingMarks = moduleResults.reduce((sum, m) => sum + (m.manualMax || 0), 0);
+  const gradedMax = totalMax - pendingMarks;
+  const percentage = gradedMax > 0 ? Math.round((totalObtained / gradedMax) * 100) : 0;
   const status = percentage >= 60 ? 'PASSED (BESTANDEN)' : 'NEEDS PRACTICE';
 
   return {
@@ -315,6 +326,7 @@ export function generateEvaluationData(profile, testBundle) {
     date: new Date().toLocaleDateString('de-DE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
     totalObtained,
     totalMax,
+    pendingMarks,
     percentage,
     status,
     hasManualReview: moduleResults.some((m) => m.isManualReview),
@@ -623,7 +635,7 @@ export function buildHtmlReport(data) {
       <div class="score-card total-card">
         <span>Objective Marks Score</span>
         <div class="score-val">${data.totalObtained} / ${data.totalMax}</div>
-        <div class="score-sub">Objective Accuracy: ${data.percentage}%${data.hasManualReview ? ' (+ Writing Pending Evaluation)' : ''}</div>
+        <div class="score-sub">Objective Accuracy: ${data.percentage}%${data.pendingMarks > 0 ? ` (+ ${data.pendingMarks} Writing Marks Pending Evaluation)` : ''}</div>
       </div>
       ${data.moduleResults.map((m) => `
         <div class="score-card">

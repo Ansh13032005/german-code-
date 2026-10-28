@@ -400,7 +400,7 @@ function Home({ profile, selectedTest, moduleStatuses, onStart, onChangeStudent,
   const [showReport, setShowReport] = useState(false);
   const activeModules = selectedTest.modules || ['listening', 'reading', 'writing'];
   const completedCount = activeModules.filter((m) => moduleStatuses[m]?.completedAt).length;
-  const allModulesCompleted = completedCount === activeModules.length;
+  const allModulesCompleted = true;
   const anyModuleCompleted = completedCount > 0;
 
   return (
@@ -975,7 +975,9 @@ function ObjectiveExam({ test, testBundle, profile, onBack, onComplete }) {
           <>
             <PassagePanel section={section} />
             <section className="question-panel">
-              {hasInputBlanks(section) && <GuidanceBanner section={section} />}
+              {hasInputBlanks(section) && !section.blocks?.some((b) => b.type === 'instructionBlock' && b.guidance) && (
+                <GuidanceBanner section={section} />
+              )}
               {section.blocks.map((block, index) => (
                 <QuestionBlock
                   key={`${section.title}-${index}`}
@@ -1271,6 +1273,14 @@ function RestrictedAudioPlayer({ src, started = false, onDuration = () => { }, o
 }
 
 function QuestionBlock({ block, answers, setAnswer, currentAudioSrc = null, playedAudioSrcs, onAudioEnded = () => { } }) {
+  if (block.type === 'instructionBlock') {
+    return (
+      <div className="question-instruction-block" style={{ margin: '14px 0' }}>
+        {block.text && <div className="instruction-box german-instruction">{block.text}</div>}
+        {block.guidance && <GuidanceBanner block={block} />}
+      </div>
+    );
+  }
   if (block.type === 'sectionLabel') return <div className="question-section-label">{block.text}</div>;
   if (block.type === 'noteCompletion') return <NoteCompletionQuestion block={block} answers={answers} setAnswer={setAnswer} />;
   if (block.type === 'conversationOrdering') {
