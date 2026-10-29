@@ -170,15 +170,15 @@ function TestSelectionPage({ tests, initialTestId, onStart, loadingTestId }) {
         category === 'All'
           ? true
           : category === 'Fastrack'
-            ? test.name.toLowerCase().startsWith('fastrack')
+            ? (test.name.toLowerCase().startsWith('fastrack') || test.id.toLowerCase().startsWith('fastrack'))
             : category === 'Regular'
-              ? test.name.toLowerCase().startsWith('regular')
+              ? ((test.name.toLowerCase().includes('regular') || test.id.toLowerCase().startsWith('regular')) && !test.name.toLowerCase().includes('a2') && !test.id.toLowerCase().startsWith('a2'))
               : category === 'A2 Regular'
-                ? test.name.toLowerCase().startsWith('a2')
+                ? (test.name.toLowerCase().includes('a2') || test.id.toLowerCase().startsWith('a2'))
                 : category === 'Worksheets'
                   ? (test.name.toLowerCase().startsWith('worksheet') || test.name.toLowerCase().startsWith('kapitel') || test.id.toLowerCase().startsWith('kapitel'))
                   : category === 'Unit Tests'
-                    ? test.name.toLowerCase().startsWith('unit')
+                    ? (test.name.toLowerCase().startsWith('unit') || test.id.toLowerCase().startsWith('unit'))
                     : true;
 
       const q = searchQuery.trim().toLowerCase();
@@ -277,7 +277,7 @@ function TestSelectionPage({ tests, initialTestId, onStart, loadingTestId }) {
                 const isFastrack = test.name.toLowerCase().startsWith('fastrack');
                 const isWorksheet = test.name.toLowerCase().startsWith('worksheet') || test.id.toLowerCase().startsWith('kapitel');
                 const isUnit = test.name.toLowerCase().startsWith('unit');
-                const isA2 = test.name.toLowerCase().startsWith('a2');
+                const isA2 = test.name.toLowerCase().includes('a2') || test.id.toLowerCase().startsWith('a2');
                 const typeLabel = isWorksheet ? 'Worksheet' : isUnit ? 'Unit Test' : isFastrack ? 'Fastrack Practice' : isA2 ? 'A2 Regular Model' : 'Start Deutsch 1';
                 const tagClass = isWorksheet ? 'tag-kapitel' : isUnit ? 'tag-unit' : isFastrack ? 'tag-fastrack' : isA2 ? 'tag-a2' : 'tag-regular';
 

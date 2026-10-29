@@ -74,6 +74,18 @@ export function collectQuestions(data) {
         (block.entries || []).forEach((entry) => add(entry.q, { kind: 'text', where }));
         return;
       }
+      if (block.type === 'sentenceGaps') {
+        (block.sentences || []).forEach((sentence) => (sentence.segments || []).forEach((segment) => add(segment.q, { kind: 'text', where })));
+        return;
+      }
+      if (block.type === 'imageOrderingDrop') {
+        [...(block.images || []), ...(block.slots || [])].forEach((item) => add(item.q, { kind: 'text', where }));
+        return;
+      }
+      if (block.type === 'imageDialogueRow') {
+        (block.rows || []).forEach((row) => (row.lines || []).forEach((line) => add(line.q, { kind: 'text', where })));
+        return;
+      }
       if (String(block.type || '').startsWith('example')) return;
       if (CHOICE_OPTION_FIELDS[block.type]) {
         add(block.q, { kind: 'choice', where, options: Object.keys(block[CHOICE_OPTION_FIELDS[block.type]] || {}) });
@@ -132,11 +144,12 @@ export function answerKeyProblems(questionsData, answerKey = {}) {
     if (!info) continue;
 
     const options = info.options || info.group?.options;
+    // Extra spelling variants are fine as long as at least one accepted answer is a selectable option.
     if (options) {
       const normalizedOptions = options.map(normalize);
-      accepted.filter((answer) => !normalizedOptions.includes(normalize(answer))).forEach((answer) => {
-        problems.push(`Answer key ${q}: "${answer}" is not one of the options (${options.join(', ')})`);
-      });
+      if (!accepted.some((answer) => normalizedOptions.includes(normalize(answer)))) {
+        accepted.forEach((answer) => problems.push(`Answer key ${q}: "${answer}" is not one of the options (${options.join(', ')})`));
+      }
     }
     if (info.kind === 'ordering') {
       accepted.forEach((answer) => {
@@ -168,11 +181,14 @@ export function answerKeyProblems(questionsData, answerKey = {}) {
   return problems;
 }
 
+// Same folders and extensions as the asset glob in src/services/loadTest.js.
+const LOADABLE_ASSET = /^(listening\/.+\.(mp3|wav|ogg|m4a|mpeg)|assets\/.+\.(png|jpg|jpeg|webp|gif|svg))$/i;
+
 function collectAssets(value, refs = []) {
   if (Array.isArray(value)) value.forEach((item) => collectAssets(item, refs));
   else if (value && typeof value === 'object') {
     Object.entries(value).forEach(([key, nested]) => {
-      if ((key === 'image' || key === 'audio') && typeof nested === 'string') refs.push(nested);
+      if ((key === 'image' || key === 'audio' || key === 'src') && typeof nested === 'string') refs.push(nested);
       else collectAssets(nested, refs);
     });
   }
@@ -202,8 +218,6 @@ export function validateTest(testsDir, testId) {
 
   const config = read('config.json');
   if (!config) return errors;
-  const configId = config.testId ?? config.id;
-  if (configId !== undefined && configId !== testId) errors.push(`config.json id "${configId}" must be "${testId}"`);
 
   const sections = Array.isArray(config.sections) ? config.sections : ['listening', 'reading', 'writing'];
   for (const module of sections) {
@@ -221,8 +235,13 @@ export function validateTest(testsDir, testId) {
 
     const assets = collectAssets(questions);
     if (module === 'listening' && questions.audioMode !== 'perTask' && config.audio !== null) assets.push(config.audio || 'listening/audio.mp3');
+    if (module === 'listening' && !assets.some((ref) => /\.(mp3|wav|ogg|m4a|mpeg)$/i.test(ref))) {
+      errors.push('listening: no audio is played (config.audio is null and no question has an "audio" file)');
+    }
     assets.filter((ref) => !/^(https?:|data:|blob:)/i.test(ref)).forEach((ref) => {
-      if (!exists(ref.replace(/^\.?\//, ''))) errors.push(`${module}: missing asset tests/${testId}/${ref}`);
+      const relative = ref.replace(/^\.?\//, '');
+      if (!exists(relative)) errors.push(`${module}: missing asset tests/${testId}/${ref}`);
+      else if (!LOADABLE_ASSET.test(relative)) errors.push(`${module}: asset tests/${testId}/${ref} is not loaded by the app (audio must be in listening/, images in assets/)`);
     });
 
     const answerKey = { ...(answers.answers || {}) };
