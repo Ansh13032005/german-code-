@@ -49,7 +49,7 @@ const BRAND_LOGO = '/assets/bff-logo.png';
 const MODULE_META = {
   listening: { Icon: Headphones, title: 'Listening', subtitle: 'Hören', text: '3 parts, 15 questions, supplied audio, image-based choices in Part 1.' },
   reading: { Icon: BookOpen, title: 'Reading', subtitle: 'Lesen', text: '3 parts, 15 questions, letters, websites, advertisements and notices.' },
-  grammar: { Icon: SpellCheck, title: 'Grammar', subtitle: 'Grammatik', text: 'Grammar and structure questions covering forms, cases and word order.' },
+  grammar: { Icon: SpellCheck, title: 'Grammar & Vocabulary', subtitle: 'Grammatik & Wortschatz', text: 'Grammar and vocabulary questions covering forms, cases, word order and expressions.' },
   writing: { Icon: FileText, title: 'Writing', subtitle: 'Schreiben', text: '2 parts: form completion and a short written message.' }
 };
 
@@ -176,11 +176,11 @@ function TestSelectionPage({ tests, initialTestId, onStart, loadingTestId }) {
               : category === 'Regular'
                 ? test.name.toLowerCase().startsWith('regular')
                 : category === 'A2 Regular'
-                  ? test.name.toLowerCase().startsWith('a2')
+                  ? (test.name.toLowerCase().startsWith('a2 regular') || test.id.toLowerCase().startsWith('a2 regular'))
                   : category === 'Worksheets'
                     ? (test.name.toLowerCase().startsWith('worksheet') || test.name.toLowerCase().startsWith('kapitel') || test.id.toLowerCase().startsWith('kapitel'))
                     : category === 'Unit Tests'
-                      ? test.name.toLowerCase().startsWith('unit')
+                      ? (test.name.toLowerCase().includes('unit') || test.id.toLowerCase().includes('unit'))
                       : true;
 
       const q = searchQuery.trim().toLowerCase();
@@ -278,8 +278,8 @@ function TestSelectionPage({ tests, initialTestId, onStart, loadingTestId }) {
                 const isSelected = selectedTestId === test.id;
                 const isFastrack = test.name.toLowerCase().startsWith('fastrack');
                 const isWorksheet = test.name.toLowerCase().startsWith('worksheet') || test.id.toLowerCase().startsWith('kapitel');
-                const isUnit = test.name.toLowerCase().startsWith('unit');
-                const isA2 = test.name.toLowerCase().startsWith('a2');
+                const isUnit = test.name.toLowerCase().includes('unit');
+                const isA2 = test.name.toLowerCase().startsWith('a2 regular');
                 const typeLabel = isWorksheet ? 'Worksheet' : isUnit ? 'Unit Test' : isFastrack ? 'Fastrack Practice' : isA2 ? 'A2 Regular Model' : 'Start Deutsch 1';
                 const tagClass = isWorksheet ? 'tag-kapitel' : isUnit ? 'tag-unit' : isFastrack ? 'tag-fastrack' : isA2 ? 'tag-a2' : 'tag-regular';
 
@@ -1516,7 +1516,22 @@ function ImageGridInputsQuestion({ block, answers = {}, setAnswer = () => { } })
   const items = block.items || [];
   return (
     <div className="image-grid-inputs-container">
-      <div className="image-grid-inputs-row">
+      <div className="image-grid-inputs-row" style={block.columns ? { gridTemplateColumns: `repeat(${block.columns}, 1fr)` } : undefined}>
+        {block.example && (
+          <div className="image-grid-input-card example-card">
+            {block.example.badge && <span className="image-grid-badge-top">{block.example.badge}</span>}
+            {block.example.image && (
+              <div className="image-grid-thumb-box">
+                <img src={block.example.image} alt={block.example.prompt || 'Beispiel'} draggable="false" />
+              </div>
+            )}
+            <div className="image-grid-input-control">
+              <span className="example-lock-tag" style={{ display: 'inline-block', padding: '2px 8px', fontSize: '13px', background: 'var(--color-bg-secondary, #e2e8f0)', borderRadius: '4px', fontWeight: 600 }}>
+                {block.example.answer || block.example.prompt}
+              </span>
+            </div>
+          </div>
+        )}
         {items.map((item) => {
           const promptParts = (item.prompt || '').split('______');
           const prefix = promptParts[0] || '';
@@ -1573,17 +1588,20 @@ function SentenceGapsQuestion({ block, answers = {}, setAnswer = () => { } }) {
                   if (seg.text !== undefined && seg.q === undefined) {
                     return <span key={segIdx} className="sentence-gap-plain-text">{seg.text}</span>;
                   }
+                  const isReadonly = Boolean(seg.disabled || seg.readonly);
+                  const val = isReadonly ? (seg.value || '') : (answers[seg.q] || '');
                   return (
-                    <span key={segIdx} className="sentence-gap-inline-wrapper" id={`q-${seg.q}`}>
+                    <span key={segIdx} className={`sentence-gap-inline-wrapper ${isReadonly ? 'is-example-gap' : ''}`} id={seg.q ? `q-${seg.q}` : undefined}>
                       {seg.q !== undefined && <span className="sentence-gap-badge">{seg.q}</span>}
                       {seg.prefix && <span className="sentence-gap-prefix">{seg.prefix}</span>}
                       <input
                         type="text"
-                        className="text-input-answer sentence-gap-underline-input"
-                        value={answers[seg.q] || ''}
-                        onChange={(e) => setAnswer(seg.q, e.target.value)}
-                        placeholder={seg.placeholder || 'answer'}
+                        className={`text-input-answer sentence-gap-underline-input ${isReadonly ? 'disabled-gap' : ''}`}
+                        value={val}
+                        onChange={(e) => !isReadonly && setAnswer(seg.q, e.target.value)}
+                        placeholder={seg.placeholder || ''}
                         autoComplete="off"
+                        disabled={isReadonly}
                       />
                       {seg.suffix && <span className="sentence-gap-suffix">{seg.suffix}</span>}
                     </span>

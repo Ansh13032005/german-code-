@@ -97,6 +97,13 @@ function extractQuestionPrompts(test) {
       if (block.type === 'matching' && Array.isArray(block.leftItems)) {
         block.leftItems.forEach((item) => set(item.q, item.text || item.label, sectionLabel));
       }
+      if (block.type === 'sentenceGaps' && Array.isArray(block.sentences)) {
+        block.sentences.forEach((sent) => {
+          (sent.segments || []).forEach((seg) => {
+            if (seg.q != null) set(seg.q, `${seg.prefix || ''}____${seg.suffix || ''}`, sectionLabel);
+          });
+        });
+      }
       if (Array.isArray(block.items)) {
         block.items.forEach((item) => set(item.q, item.prompt || item.text, sectionLabel));
       }
@@ -172,6 +179,35 @@ function buildRow(test, answers, q, qText, wordSearchQ) {
     };
   }
   const accepted = acceptedAnswersFor(entry);
+  if (entry && typeof entry === 'object' && !Array.isArray(entry) && Array.isArray(entry.parts)) {
+    const studentVal = String(answers?.[q] || '').trim();
+    // Support evaluating compound or multi-gap answers with partial marks
+    const givenParts = studentVal.includes('|') ? studentVal.split('|').map((s) => s.trim()) : studentVal.split(/\s+/).filter(Boolean);
+    let pts = 0;
+    const partMax = entry.marks || entry.parts.reduce((sum, p) => sum + (p.marks || 0.5), 0);
+    const expectedDisplay = entry.parts.map((p) => acceptedAnswersFor(p)[0]).join(' ... ');
+    let allOk = true;
+    entry.parts.forEach((part, pIdx) => {
+      const partAccepted = acceptedAnswersFor(part);
+      const partGiven = givenParts[pIdx] || '';
+      const partWeight = typeof part.marks === 'number' ? part.marks : 0.5;
+      if (isCorrect(partGiven, partAccepted)) {
+        pts += partWeight;
+      } else {
+        allOk = false;
+      }
+    });
+    return {
+      q,
+      questionText: qText,
+      isWordSearch: false,
+      student: studentVal || '',
+      correct: expectedDisplay,
+      marksObtained: pts,
+      maxMarks: partMax,
+      ok: allOk
+    };
+  }
   const ok = isCorrect(answers?.[q], accepted);
   return {
     q,
