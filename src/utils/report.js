@@ -97,6 +97,13 @@ function extractQuestionPrompts(test) {
       if (block.type === 'matching' && Array.isArray(block.leftItems)) {
         block.leftItems.forEach((item) => set(item.q, item.text || item.label, sectionLabel));
       }
+      if (block.type === 'sentenceGaps' && Array.isArray(block.sentences)) {
+        block.sentences.forEach((sent) => {
+          (sent.segments || []).forEach((seg) => {
+            if (seg.q != null) set(seg.q, `${seg.prefix || ''}____${seg.suffix || ''}`, sectionLabel);
+          });
+        });
+      }
       if (Array.isArray(block.items)) {
         block.items.forEach((item) => set(item.q, item.prompt || item.text, sectionLabel));
       }
@@ -172,6 +179,35 @@ function buildRow(test, answers, q, qText, wordSearchQ) {
     };
   }
   const accepted = acceptedAnswersFor(entry);
+  if (entry && typeof entry === 'object' && !Array.isArray(entry) && Array.isArray(entry.parts)) {
+    const studentVal = String(answers?.[q] || '').trim();
+    // Support evaluating compound or multi-gap answers with partial marks
+    const givenParts = studentVal.includes('|') ? studentVal.split('|').map((s) => s.trim()) : studentVal.split(/\s+/).filter(Boolean);
+    let pts = 0;
+    const partMax = entry.marks || entry.parts.reduce((sum, p) => sum + (p.marks || 0.5), 0);
+    const expectedDisplay = entry.parts.map((p) => acceptedAnswersFor(p)[0]).join(' ... ');
+    let allOk = true;
+    entry.parts.forEach((part, pIdx) => {
+      const partAccepted = acceptedAnswersFor(part);
+      const partGiven = givenParts[pIdx] || '';
+      const partWeight = typeof part.marks === 'number' ? part.marks : 0.5;
+      if (isCorrect(partGiven, partAccepted)) {
+        pts += partWeight;
+      } else {
+        allOk = false;
+      }
+    });
+    return {
+      q,
+      questionText: qText,
+      isWordSearch: false,
+      student: studentVal || '',
+      correct: expectedDisplay,
+      marksObtained: pts,
+      maxMarks: partMax,
+      ok: allOk
+    };
+  }
   const ok = isCorrect(answers?.[q], accepted);
   return {
     q,
@@ -710,18 +746,109 @@ export function buildHtmlReport(data) {
 </html>`;
 }
 
+export function buildTextReport(data) {
+  const divider = '='.repeat(80);
+  const subDivider = '-'.repeat(80);
+  const lines = [];
+
+  lines.push(divider);
+  lines.push('BRIGHT FUTURE FOUNDATION – GERMAN ASSESSMENT REPORT');
+  lines.push(divider);
+  lines.push('');
+
+  lines.push('CANDIDATE INFORMATION:');
+  lines.push(subDivider);
+  lines.push('Name:          ' + data.studentName);
+  lines.push('Candidate ID:  ' + data.studentId);
+  lines.push('Email:         ' + data.candidateEmail);
+  lines.push('Test Name:     ' + data.testName);
+  lines.push('Level:         ' + data.level);
+  lines.push('Date:          ' + data.date);
+  lines.push('');
+
+  lines.push(divider);
+  lines.push('OVERALL RESULT SUMMARY:');
+  lines.push(divider);
+  lines.push('Total Score:   ' + data.totalObtained + ' / ' + data.totalMax + ' Marks');
+  lines.push('Percentage:    ' + data.percentage + '% (graded components)');
+  lines.push('Status:        ' + data.status);
+  if (data.pendingMarks > 0) {
+    lines.push('Faculty Notes: ' + data.pendingMarks + ' Marks pending manual evaluation');
+  }
+  lines.push('');
+
+  lines.push(divider);
+  lines.push('MODULE BREAKDOWN:');
+  lines.push(divider);
+  (data.moduleResults || []).forEach((m) => {
+    const pct = m.total > 0 ? Math.round((m.correct / m.total) * 100) : 0;
+    const manualNote = m.manualMax > 0 ? ' (' + m.manualMax + ' pts pending review)' : '';
+    lines.push('- ' + m.title + ': ' + m.correct + ' / ' + m.total + ' Marks (' + pct + '%)' + manualNote);
+  });
+  lines.push('');
+
+  lines.push(divider);
+  lines.push('DETAILED QUESTION-BY-QUESTION BREAKDOWN:');
+  lines.push(divider);
+
+  (data.moduleResults || []).forEach((m) => {
+    lines.push('');
+    lines.push('--- ' + m.title.toUpperCase() + ' (Score: ' + m.correct + ' / ' + m.total + ') ---');
+    lines.push(subDivider);
+
+    if (m.rows && m.rows.length > 0) {
+      lines.push('Q#   | Question Prompt                  | Student Answer   | Correct Answer   | Result');
+      lines.push('-----+----------------------------------+------------------+------------------+--------');
+
+      m.rows.forEach((row) => {
+        const qNum = String(row.q ?? '').padEnd(4, ' ');
+        const prompt = String(row.questionText || '-').replace(/\r?\n/g, ' ').substring(0, 32).padEnd(32, ' ');
+        const studentAns = String(row.student || '-').replace(/\r?\n/g, ' ').substring(0, 16).padEnd(16, ' ');
+        const correctAns = String(row.correct || '-').replace(/\r?\n/g, ' ').substring(0, 16).padEnd(16, ' ');
+        const result = row.ok ? '[CORRECT] (' + row.marksObtained + '/' + row.maxMarks + ')' : '[WRONG]   (' + row.marksObtained + '/' + row.maxMarks + ')';
+
+        lines.push(qNum + ' | ' + prompt + ' | ' + studentAns + ' | ' + correctAns + ' | ' + result);
+      });
+    }
+
+    if (m.writtenTasks && m.writtenTasks.length > 0) {
+      lines.push('');
+      lines.push('WRITING SUBMISSIONS:');
+      m.writtenTasks.forEach((task, idx) => {
+        lines.push('[' + (task.title || ('Task ' + (idx + 1))) + ']');
+        lines.push('Submitted Response:');
+        lines.push(task.response || '[No answer submitted]');
+        lines.push('');
+      });
+      lines.push('* Requires faculty evaluation.');
+    } else if (m.textResponse) {
+      lines.push('');
+      lines.push('WRITING SUBMISSION:');
+      lines.push(m.textResponse);
+      lines.push('');
+      lines.push('* Requires faculty evaluation.');
+    }
+  });
+
+  lines.push('');
+  lines.push(divider);
+  lines.push('END OF REPORT');
+  lines.push(divider);
+
+  return lines.join('\n');
+}
+
 export function downloadCompleteReport(profile, testBundle) {
   const data = generateEvaluationData(profile, testBundle);
-  const html = buildHtmlReport(data);
+  const textContent = buildTextReport(data);
 
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `${cleanFilename(profile?.studentName)}-${testBundle.id}-report.html`;
+  anchor.download = cleanFilename(profile?.studentName) + '-' + testBundle.id + '-report.txt';
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
 }
-
